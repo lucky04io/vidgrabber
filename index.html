@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VidGrab — Universal Free Video Downloader</title>
+  <meta name="description" content="Free, serverless, fast video downloader for YouTube, Instagram, Reddit, Facebook, X.com and more with full audio and custom quality.">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="style.css">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+            }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col antialiased selection:bg-indigo-500 selection:text-white">
+
+  <!-- Ambient Glow Background -->
+  <div class="fixed inset-0 overflow-hidden pointer-events-none z-0">
+    <div class="absolute -top-40 -left-40 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl"></div>
+    <div class="absolute top-1/3 -right-40 w-96 h-96 bg-purple-600/20 rounded-full blur-3xl"></div>
+    <div class="absolute -bottom-40 left-1/3 w-96 h-96 bg-cyan-600/15 rounded-full blur-3xl"></div>
+  </div>
+
+  <!-- Navbar -->
+  <header class="relative z-10 border-b border-slate-800/80 backdrop-blur-md bg-slate-950/70 sticky top-0">
+    <div class="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-indigo-500/25">
+          <i data-lucide="download" class="w-5 h-5 text-white"></i>
+        </div>
+        <div>
+          <span class="text-xl font-bold bg-gradient-to-r from-white via-slate-200 to-indigo-300 bg-clip-text text-transparent">VidGrab</span>
+          <span class="text-xs ml-1.5 px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-medium">Free & Client-Side</span>
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-3">
+        <button id="settingsBtn" title="API Settings" class="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/70 transition">
+          <i data-lucide="settings-2" class="w-5 h-5"></i>
+        </button>
+        <a href="https://github.com" id="githubLink" target="_blank" rel="noopener" class="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/70 transition" title="View Source on GitHub">
+          <i data-lucide="github" class="w-5 h-5"></i>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="relative z-10 flex-1 max-w-4xl mx-auto w-full px-4 py-12 flex flex-col items-center">
+    
+    <!-- Hero Heading -->
+    <div class="text-center max-w-2xl mb-10">
+      <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/90 border border-slate-800 text-xs text-indigo-400 mb-4 shadow-sm">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        Zero Server Costs • High Quality with Audio
+      </div>
+      <h1 class="text-4xl sm:text-5xl font-extrabold tracking-tight text-white mb-4">
+        Universal Video Downloader
+      </h1>
+      <p class="text-slate-400 text-base sm:text-lg">
+        Save videos from <span class="text-white font-medium">YouTube</span>, <span class="text-white font-medium">Instagram</span>, <span class="text-white font-medium">Reddit</span>, <span class="text-white font-medium">Facebook</span>, and <span class="text-white font-medium">X.com</span> in any quality.
+      </p>
+    </div>
+
+    <!-- Downloader Box -->
+    <div class="w-full bg-slate-900/60 backdrop-blur-xl border border-slate-800/90 rounded-2xl p-4 sm:p-6 shadow-2xl shadow-black/50 mb-8">
+      
+      <!-- Input Row -->
+      <div class="relative flex flex-col sm:flex-row gap-3">
+        <div class="relative flex-1">
+          <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500">
+            <span id="platformIconContainer">
+              <i data-lucide="link" class="w-5 h-5"></i>
+            </span>
+          </div>
+          <input 
+            type="url" 
+            id="urlInput" 
+            placeholder="Paste video link here (YouTube, Instagram, Reddit, X...)" 
+            class="w-full pl-12 pr-24 py-3.5 bg-slate-950/80 border border-slate-750 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition text-sm sm:text-base"
+            autocomplete="off"
+            spellcheck="false"
+          >
+          <div class="absolute inset-y-0 right-0 pr-2 flex items-center gap-1">
+            <button 
+              type="button" 
+              id="clearBtn" 
+              class="hidden p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition" 
+              title="Clear"
+            >
+              <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+            <button 
+              type="button" 
+              id="pasteBtn" 
+              class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-medium transition"
+              title="Paste from clipboard"
+            >
+              <i data-lucide="clipboard" class="w-3.5 h-3.5"></i>
+              <span>Paste</span>
+            </button>
+          </div>
+        </div>
+
+        <button 
+          id="downloadBtn" 
+          class="flex items-center justify-center gap-2 px-6 py-3.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold rounded-xl shadow-lg shadow-indigo-500/25 transition active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+        >
+          <i data-lucide="arrow-down-to-line" class="w-5 h-5"></i>
+          <span>Fetch Video</span>
+        </button>
+      </div>
+
+      <!-- Platform Detection Badge -->
+      <div id="detectedPlatformBadge" class="hidden mt-3 flex items-center gap-2 text-xs text-slate-400">
+        <span>Detected platform:</span>
+        <span id="platformName" class="font-semibold text-indigo-400 capitalize">YouTube</span>
+      </div>
+
+      <!-- Settings & Quality Row -->
+      <div class="mt-5 pt-5 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-4 text-xs sm:text-sm">
+        
+        <!-- Quality selector -->
+        <div class="flex items-center gap-2">
+          <label for="qualitySelect" class="text-slate-400 font-medium flex items-center gap-1.5">
+            <i data-lucide="sliders" class="w-4 h-4 text-indigo-400"></i>
+            Quality:
+          </label>
+          <select id="qualitySelect" class="bg-slate-950 border border-slate-750 text-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+            <option value="max" selected>Max Available (Best)</option>
+            <option value="2160">4K (2160p)</option>
+            <option value="1440">2K (1440p)</option>
+            <option value="1080">1080p (Full HD)</option>
+            <option value="720">720p (HD)</option>
+            <option value="480">480p (SD)</option>
+            <option value="360">360p (Data Saver)</option>
+          </select>
+        </div>
+
+        <!-- Mode Toggle (Video vs Audio-only) -->
+        <div class="flex items-center gap-2">
+          <label for="formatSelect" class="text-slate-400 font-medium flex items-center gap-1.5">
+            <i data-lucide="file-video" class="w-4 h-4 text-purple-400"></i>
+            Format:
+          </label>
+          <select id="formatSelect" class="bg-slate-950 border border-slate-750 text-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+            <option value="auto" selected>Video + Audio (MP4)</option>
+            <option value="audio">Audio Only (MP3)</option>
+          </select>
+        </div>
+
+        <!-- Audio Codec/Mute option -->
+        <div class="flex items-center gap-2">
+          <label class="inline-flex items-center cursor-pointer gap-2 text-slate-400">
+            <input type="checkbox" id="muteAudio" class="sr-only peer">
+            <div class="relative w-8 h-4 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-indigo-600"></div>
+            <span class="text-xs">Mute Audio</span>
+          </label>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Status & Progress Container -->
+    <div id="statusContainer" class="hidden w-full mb-8">
+      <!-- Loading State -->
+      <div id="loadingCard" class="hidden p-6 rounded-2xl bg-slate-900/60 border border-slate-800 flex flex-col items-center justify-center text-center">
+        <div class="w-12 h-12 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin mb-4"></div>
+        <p class="text-slate-200 font-medium text-base mb-1" id="loadingText">Processing video stream...</p>
+        <p class="text-slate-400 text-xs">Extracting media & merging high-quality audio streams</p>
+      </div>
+
+      <!-- Error Card -->
+      <div id="errorCard" class="hidden p-4 sm:p-5 rounded-2xl bg-red-950/40 border border-red-500/30 text-red-200 flex items-start gap-3">
+        <i data-lucide="alert-circle" class="w-5 h-5 text-red-400 shrink-0 mt-0.5"></i>
+        <div class="flex-1 text-sm">
+          <p class="font-semibold text-red-300" id="errorTitle">Download Failed</p>
+          <p class="text-red-400/90 text-xs mt-1" id="errorMessage">Please check your URL or verify that the video is public.</p>
+        </div>
+        <button id="closeErrorBtn" class="text-red-400 hover:text-white">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <!-- Result Card -->
+      <div id="resultCard" class="hidden p-6 rounded-2xl bg-slate-900/80 border border-emerald-500/30 shadow-2xl flex flex-col gap-4">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2 text-emerald-400 text-sm font-semibold">
+            <i data-lucide="check-circle-2" class="w-5 h-5"></i>
+            <span>Video Ready for Download!</span>
+          </div>
+          <span id="resultPlatform" class="text-xs px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 capitalize">YouTube</span>
+        </div>
+
+        <div class="flex flex-col sm:flex-row items-center gap-4 bg-slate-950/70 p-4 rounded-xl border border-slate-800">
+          <div class="w-12 h-12 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0">
+            <i data-lucide="film" class="w-6 h-6"></i>
+          </div>
+          <div class="flex-1 text-center sm:text-left overflow-hidden">
+            <p id="resultFilename" class="text-sm font-medium text-slate-200 truncate">video_download.mp4</p>
+            <p class="text-xs text-slate-400 mt-0.5">High definition with clean synced audio</p>
+          </div>
+          <a 
+            id="saveVideoLink" 
+            href="#" 
+            target="_blank"
+            rel="noopener"
+            class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-sm rounded-xl shadow-lg shadow-emerald-600/20 transition active:scale-95"
+          >
+            <i data-lucide="download" class="w-4 h-4"></i>
+            <span>Save to Device</span>
+          </a>
+        </div>
+
+        <!-- Multi-item Picker (e.g., Instagram carousels or Reddit media sets) -->
+        <div id="pickerContainer" class="hidden flex flex-col gap-2 mt-2">
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Multiple Media Items Found:</p>
+          <div id="pickerList" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Supported Platforms Grid -->
+    <div class="w-full">
+      <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider text-center mb-4">Supported Platforms</h2>
+      <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        
+        <!-- YouTube -->
+        <div class="p-3.5 rounded-xl bg-slate-900/40 border border-slate-800/60 flex flex-col items-center text-center hover:border-slate-700 transition">
+          <div class="w-8 h-8 rounded-lg bg-red-500/10 text-red-500 flex items-center justify-center mb-2">
+            <i data-lucide="youtube" class="w-4 h-4"></i>
+          </div>
+          <span class="text-xs font-semibold text-slate-200">YouTube</span>
+          <span class="text-[10px] text-slate-500 mt-0.5">Videos & Shorts</span>
+        </div>
+
+        <!-- Instagram -->
+        <div class="p-3.5 rounded-xl bg-slate-900/40 border border-slate-800/60 flex flex-col items-center text-center hover:border-slate-700 transition">
+          <div class="w-8 h-8 rounded-lg bg-pink-500/10 text-pink-500 flex items-center justify-center mb-2">
+            <i data-lucide="instagram" class="w-4 h-4"></i>
+          </div>
+          <span class="text-xs font-semibold text-slate-200">Instagram</span>
+          <span class="text-[10px] text-slate-500 mt-0.5">Reels, Posts & IGTV</span>
+        </div>
+
+        <!-- Reddit -->
+        <div class="p-3.5 rounded-xl bg-slate-900/40 border border-slate-800/60 flex flex-col items-center text-center hover:border-slate-700 transition">
+          <div class="w-8 h-8 rounded-lg bg-orange-500/10 text-orange-500 flex items-center justify-center mb-2">
+            <i data-lucide="message-square" class="w-4 h-4"></i>
+          </div>
+          <span class="text-xs font-semibold text-slate-200">Reddit</span>
+          <span class="text-[10px] text-slate-500 mt-0.5">v.redd.it with audio</span>
+        </div>
+
+        <!-- Facebook -->
+        <div class="p-3.5 rounded-xl bg-slate-900/40 border border-slate-800/60 flex flex-col items-center text-center hover:border-slate-700 transition">
+          <div class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-500 flex items-center justify-center mb-2">
+            <i data-lucide="facebook" class="w-4 h-4"></i>
+          </div>
+          <span class="text-xs font-semibold text-slate-200">Facebook</span>
+          <span class="text-[10px] text-slate-500 mt-0.5">Public Videos & Reels</span>
+        </div>
+
+        <!-- X.com -->
+        <div class="col-span-2 sm:col-span-1 p-3.5 rounded-xl bg-slate-900/40 border border-slate-800/60 flex flex-col items-center text-center hover:border-slate-700 transition">
+          <div class="w-8 h-8 rounded-lg bg-slate-500/10 text-slate-300 flex items-center justify-center mb-2">
+            <i data-lucide="twitter" class="w-4 h-4"></i>
+          </div>
+          <span class="text-xs font-semibold text-slate-200">X (Twitter)</span>
+          <span class="text-[10px] text-slate-500 mt-0.5">Video Tweets & Clips</span>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Instructions / FAQs Section -->
+    <div class="w-full mt-12 grid grid-cols-1 sm:grid-cols-3 gap-6 text-slate-400 text-xs">
+      <div class="p-4 rounded-xl bg-slate-900/30 border border-slate-800/50">
+        <div class="text-indigo-400 font-semibold text-sm mb-1 flex items-center gap-1.5">
+          <i data-lucide="copy" class="w-4 h-4"></i> 1. Paste Link
+        </div>
+        <p>Copy the URL of the public video you want from YouTube, Instagram, Reddit, Facebook, or X.com.</p>
+      </div>
+
+      <div class="p-4 rounded-xl bg-slate-900/30 border border-slate-800/50">
+        <div class="text-indigo-400 font-semibold text-sm mb-1 flex items-center gap-1.5">
+          <i data-lucide="sliders" class="w-4 h-4"></i> 2. Choose Quality
+        </div>
+        <p>Pick your preferred resolution (up to 4K or 1080p) or switch to audio-only MP3 format.</p>
+      </div>
+
+      <div class="p-4 rounded-xl bg-slate-900/30 border border-slate-800/50">
+        <div class="text-indigo-400 font-semibold text-sm mb-1 flex items-center gap-1.5">
+          <i data-lucide="download-cloud" class="w-4 h-4"></i> 3. Save to Device
+        </div>
+        <p>Click Fetch and download your merged video file directly onto your phone, tablet, or PC.</p>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Settings Modal (Custom Cobalt Instance) -->
+  <div id="settingsModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <i data-lucide="server" class="w-5 h-5 text-indigo-400"></i>
+          API Server Instance
+        </h3>
+        <button id="closeSettingsBtn" class="text-slate-400 hover:text-white">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <p class="text-xs text-slate-400 mb-4">
+        VidGrab uses decentralized, public Cobalt instances to process video downloads without any private server. You can choose a public instance or specify your own self-hosted one.
+      </p>
+
+      <div class="space-y-3 mb-6">
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Select Instance</label>
+          <select id="instancePresetSelect" class="w-full bg-slate-950 border border-slate-750 text-slate-200 rounded-lg px-3 py-2 text-xs focus:ring-1 focus:ring-indigo-500">
+            <option value="https://api.cobalt.tools">api.cobalt.tools (Official)</option>
+            <option value="https://cobalt-api.kwiatekm.pl">cobalt-api.kwiatekm.pl (Mirror 1)</option>
+            <option value="https://api.wuk.sh">api.wuk.sh (Mirror 2)</option>
+            <option value="custom">Custom URL...</option>
+          </select>
+        </div>
+
+        <div id="customInstanceWrapper" class="hidden">
+          <label class="block text-xs font-medium text-slate-300 mb-1">Custom API URL</label>
+          <input 
+            type="url" 
+            id="customInstanceInput" 
+            placeholder="https://your-cobalt-instance.com" 
+            class="w-full bg-slate-950 border border-slate-750 text-slate-200 rounded-lg px-3 py-2 text-xs focus:ring-1 focus:ring-indigo-500"
+          >
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2">
+        <button id="saveSettingsBtn" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold transition">
+          Save Settings
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="relative z-10 border-t border-slate-800/60 py-6 text-center text-xs text-slate-500">
+    <div class="max-w-5xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+      <p>VidGrab &bull; 100% Free & Open Source &bull; MIT License</p>
+      <p class="text-[11px] text-slate-600">For personal educational use only. Respect platform terms and copyrights.</p>
+    </div>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="app.js"></script>
+</body>
+</html>
