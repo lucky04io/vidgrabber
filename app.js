@@ -1,20 +1,15 @@
 /**
  * VidGrab — Universal Client-side Video Downloader
- * Powered by public Cobalt instances. Free, no server required.
+ * High-performance, zero-server architecture with multi-engine fallback.
+ * Powered by direct Piped API (YouTube), FxTwitter API (X.com), and smart media extractors.
  */
 
-// Default and fallback Cobalt API instances
-const DEFAULT_INSTANCES = [
-  'https://api.cobalt.tools',
-  'https://cobalt-api.kwiatekm.pl',
-  'https://api.wuk.sh'
-];
-
-// App State
+// Global State
 const state = {
-  activeInstance: localStorage.getItem('vidgrab_api_instance') || DEFAULT_INSTANCES[0],
   detectedPlatform: null,
   isProcessing: false,
+  cobaltInstance: localStorage.getItem('vidgrab_api_instance') || 'https://api.cobalt.tools',
+  cobaltApiKey: localStorage.getItem('vidgrab_api_key') || '',
 };
 
 // DOM Elements
@@ -61,7 +56,9 @@ function refreshIcons() {
   }
 }
 
-// Platform Matcher
+// -------------------------------------------------------------
+// URL Parsing & Platform Detection
+// -------------------------------------------------------------
 function detectPlatform(url) {
   if (!url) return null;
   const lower = url.toLowerCase();
@@ -72,13 +69,20 @@ function detectPlatform(url) {
   if (lower.includes('facebook.com') || lower.includes('fb.watch')) return 'facebook';
   if (lower.includes('twitter.com') || lower.includes('x.com')) return 'x (twitter)';
   if (lower.includes('tiktok.com')) return 'tiktok';
-  if (lower.includes('pinterest.com') || lower.includes('pin.it')) return 'pinterest';
-  if (lower.includes('vimeo.com')) return 'vimeo';
 
   return null;
 }
 
-// Update Platform Icon in Input
+function getYouTubeId(url) {
+  const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([\w-]{11})/);
+  return match ? match[1] : null;
+}
+
+function getTwitterId(url) {
+  const match = url.match(/(?:twitter\.com|x\.com)\/(?:#!\/)?(\w+)\/status(?:es)?\/(\d+)/i) || url.match(/\/status\/(\d+)/i);
+  return match ? (match[2] || match[1]) : null;
+}
+
 function updatePlatformUI(platform) {
   state.detectedPlatform = platform;
   let iconName = 'link';
@@ -102,28 +106,26 @@ function updatePlatformUI(platform) {
   refreshIcons();
 }
 
-// Handle Input changes
+// Input Event Handlers
 urlInput.addEventListener('input', () => {
   const val = urlInput.value.trim();
   if (val.length > 0) {
     clearBtn.classList.remove('hidden');
-    const plat = detectPlatform(val);
-    updatePlatformUI(plat);
+    updatePlatformUI(detectPlatform(val));
   } else {
     clearBtn.classList.add('hidden');
     updatePlatformUI(null);
   }
 });
 
-// Clear Button
 clearBtn.addEventListener('click', () => {
   urlInput.value = '';
   clearBtn.classList.add('hidden');
   updatePlatformUI(null);
+  resetStatus();
   urlInput.focus();
 });
 
-// Paste Button
 pasteBtn.addEventListener('click', async () => {
   try {
     const text = await navigator.clipboard.readText();
@@ -138,7 +140,7 @@ pasteBtn.addEventListener('click', async () => {
   }
 });
 
-// Hide all status cards
+// UI State Helpers
 function resetStatus() {
   statusContainer.classList.add('hidden');
   loadingCard.classList.add('hidden');
@@ -148,7 +150,6 @@ function resetStatus() {
   pickerList.innerHTML = '';
 }
 
-// Show Error
 function showError(title, msg) {
   resetStatus();
   statusContainer.classList.remove('hidden');
@@ -162,54 +163,239 @@ closeErrorBtn.addEventListener('click', () => {
   errorCard.classList.add('hidden');
 });
 
-// Call Cobalt API with automatic instance fallback
-async function fetchFromCobalt(payload) {
-  // Try active instance first, then fallbacks
-  const instancesToTry = [
-    state.activeInstance,
-    ...DEFAULT_INSTANCES.filter(i => i !== state.activeInstance)
+// -------------------------------------------------------------
+// Engine 1: YouTube & YouTube Shorts (Direct Piped API)
+// -------------------------------------------------------------
+const PIPED_INSTANCES = [
+  'https://api.piped.private.coffee',
+  'https://pipedapi.tokhmi.xyz',
+  'https://pipedapi.leptons.xyz',
+];
+
+async function fetchYouTube(videoId) {
+  let lastErr = null;
+
+  for (const base of PIPED_INSTANCES) {
+    try {
+      loadingText.textContent = `Fetching streams from YouTube node (${base.replace('https://', '')})...`;
+      const res = await fetch(`${base}/streams/${videoId}`, {
+        headers: { 'Accept': 'application/json' }
+      });
+
+      if (!res.ok) throw new Error(`Piped returned status ${res.status}`);
+      const data = await res.json();
+      if (data && (data.videoStreams?.length || data.audioStreams?.length)) {
+        return data;
+      }
+    } catch (err) {
+      console.warn('Piped instance failed:', base, err);
+      lastErr = err;
+    }
+  }
+
+  throw lastErr || new Error('Unable to extract YouTube video. The video may be age-restricted or private.');
+}
+
+// -------------------------------------------------------------
+// Engine 2: Twitter / X.com (Direct FxTwitter API)
+// -------------------------------------------------------------
+async function fetchTwitter(tweetId) {
+  loadingText.textContent = 'Extracting media from X.com/Twitter...';
+  const res = await fetch(`https://api.fxtwitter.com/status/${tweetId}`, {
+    headers: { 'Accept': 'application/json' }
+  });
+
+  if (!res.ok) {
+    throw new Error(`X.com returned ${res.status}. Tweet may be private or deleted.`);
+  }
+
+  const data = await res.json();
+  if (data.code !== 200 || !data.tweet) {
+    throw new Error(data.message || 'Tweet not found.');
+  }
+
+  return data.tweet;
+}
+
+// -------------------------------------------------------------
+// Engine 3: Cobalt API Fallback
+// -------------------------------------------------------------
+async function fetchCobalt(payload) {
+  const instances = [
+    state.cobaltInstance,
+    'https://api.cobalt.tools',
+    'https://cobalt-backend.canine.tools',
   ];
 
   let lastError = null;
 
-  for (let i = 0; i < instancesToTry.length; i++) {
-    const instance = instancesToTry[i];
+  for (const inst of instances) {
     try {
-      loadingText.textContent = `Connecting to extraction node (${i + 1}/${instancesToTry.length})...`;
-      
-      const response = await fetch(`${instance}/`, {
+      loadingText.textContent = `Connecting to extraction server (${inst.replace('https://', '')})...`;
+      const headers = {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      };
+      if (state.cobaltApiKey) {
+        headers['Authorization'] = `Api-Key ${state.cobaltApiKey}`;
+      }
+
+      const res = await fetch(`${inst}/`, {
         method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        },
+        headers: headers,
         body: JSON.stringify(payload)
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        if (errorData && errorData.text) {
-          throw new Error(errorData.text);
-        } else if (response.status === 429) {
-          throw new Error('Rate limit reached on this instance. Trying alternate server...');
-        } else {
-          throw new Error(`Server returned code ${response.status}`);
-        }
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => null);
+        throw new Error(errJson?.text || errJson?.error?.code || `HTTP ${res.status}`);
       }
 
-      const data = await response.json();
-      return data;
+      return await res.json();
     } catch (err) {
-      console.warn(`Instance failed (${instance}):`, err.message);
+      console.warn('Cobalt instance error:', inst, err.message);
       lastError = err;
-      // Continue to next instance
     }
   }
 
-  throw lastError || new Error('Could not reach any video extraction server. Please check your connection.');
+  throw lastError;
 }
 
-// Download Process
+// -------------------------------------------------------------
+// Direct Download Trigger with Blob Fallback
+// -------------------------------------------------------------
+async function triggerDownload(url, filename) {
+  try {
+    // Attempt blob download to force save dialog
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Fetch failed');
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = filename || 'video.mp4';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
+  } catch (e) {
+    // Cross-origin fallback: open directly in new tab
+    window.open(url, '_blank');
+  }
+}
+
+// -------------------------------------------------------------
+// Render Results
+// -------------------------------------------------------------
+function displayVideoResult({ title, thumbnail, platform, streams, directUrl }) {
+  resetStatus();
+  statusContainer.classList.remove('hidden');
+  resultCard.classList.remove('hidden');
+
+  resultPlatform.textContent = platform || 'Video';
+  resultFilename.textContent = title || 'video_download.mp4';
+
+  const previewEl = document.getElementById('videoPreview');
+  if (directUrl && previewEl) {
+    previewEl.src = directUrl;
+    previewEl.classList.remove('hidden');
+  } else if (previewEl) {
+    previewEl.classList.add('hidden');
+  }
+
+  if (directUrl) {
+    saveVideoLink.classList.remove('hidden');
+    saveVideoLink.href = directUrl;
+    saveVideoLink.onclick = (e) => {
+      e.preventDefault();
+      triggerDownload(directUrl, (title || 'video').replace(/[^\w\s.-]/gi, '') + '.mp4');
+    };
+  } else {
+    saveVideoLink.classList.add('hidden');
+  }
+
+  // Display available stream options
+  if (streams && streams.length > 0) {
+    pickerContainer.classList.remove('hidden');
+    pickerList.innerHTML = '';
+
+    streams.forEach((s) => {
+      const card = document.createElement('div');
+      card.className = 'p-3 bg-slate-950/80 border border-slate-800 rounded-xl flex items-center justify-between gap-3 hover:border-slate-700 transition';
+      card.innerHTML = `
+        <div class="flex items-center gap-2.5 overflow-hidden">
+          <div class="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center shrink-0">
+            <i data-lucide="${s.isAudio ? 'music' : 'film'}" class="w-4 h-4"></i>
+          </div>
+          <div class="truncate text-xs">
+            <p class="font-semibold text-slate-200 truncate">${s.label}</p>
+            <p class="text-[10px] text-slate-400 mt-0.5">${s.subtext || (s.isAudio ? 'MP3 / Audio' : 'Video + Audio')}</p>
+          </div>
+        </div>
+        <button 
+          type="button"
+          class="download-stream-btn px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold shrink-0 flex items-center gap-1.5 active:scale-95 transition"
+        >
+          <i data-lucide="download" class="w-3.5 h-3.5"></i> Save
+        </button>
+      `;
+
+      card.querySelector('.download-stream-btn').addEventListener('click', () => {
+        triggerDownload(s.url, `${(title || 'download').replace(/[^\w\s.-]/gi, '')}_${s.label}.${s.isAudio ? 'mp3' : 'mp4'}`);
+      });
+
+      pickerList.appendChild(card);
+    });
+  }
+
+  refreshIcons();
+}
+
+// -------------------------------------------------------------
+// Display Portal for Platforms needing external download gateway
+// -------------------------------------------------------------
+function displayGatewayCard({ title, platform, directGatewayUrl, gatewayName, subtitle }) {
+  resetStatus();
+  statusContainer.classList.remove('hidden');
+  resultCard.classList.remove('hidden');
+
+  resultPlatform.textContent = platform;
+  resultFilename.textContent = title;
+
+  const previewEl = document.getElementById('videoPreview');
+  if (previewEl) previewEl.classList.add('hidden');
+
+  saveVideoLink.classList.remove('hidden');
+  saveVideoLink.href = directGatewayUrl;
+  saveVideoLink.target = '_blank';
+  saveVideoLink.onclick = null; // direct navigation to download gateway
+  saveVideoLink.innerHTML = `<i data-lucide="external-link" class="w-4 h-4"></i><span>Download via ${gatewayName}</span>`;
+
+  pickerContainer.classList.remove('hidden');
+  pickerList.innerHTML = `
+    <div class="col-span-full p-4 bg-slate-950/80 border border-indigo-500/30 rounded-xl text-xs text-slate-300">
+      <div class="flex items-center gap-2 text-indigo-400 font-semibold mb-1">
+        <i data-lucide="zap" class="w-4 h-4"></i>
+        <span>Instant Download Gateway</span>
+      </div>
+      <p class="text-slate-400 mb-3">${subtitle || 'Due to cross-origin media security, download this video directly via our high-speed extraction mirror.'}</p>
+      <a 
+        href="${directGatewayUrl}" 
+        target="_blank" 
+        rel="noopener"
+        class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-lg text-xs transition"
+      >
+        <i data-lucide="download" class="w-3.5 h-3.5"></i> Open Direct Video Stream
+      </a>
+    </div>
+  `;
+
+  refreshIcons();
+}
+
+// -------------------------------------------------------------
+// Main Dispatcher
+// -------------------------------------------------------------
 async function processDownload() {
   const rawUrl = urlInput.value.trim();
   if (!rawUrl) {
@@ -217,7 +403,8 @@ async function processDownload() {
     return;
   }
 
-  // Set Processing State
+  const platform = detectPlatform(rawUrl);
+
   state.isProcessing = true;
   downloadBtn.disabled = true;
   downloadBtn.innerHTML = `<div class="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></div><span>Fetching...</span>`;
@@ -225,102 +412,174 @@ async function processDownload() {
   resetStatus();
   statusContainer.classList.remove('hidden');
   loadingCard.classList.remove('hidden');
-  loadingText.textContent = 'Contacting video processing engine...';
-
-  const downloadMode = formatSelect.value === 'audio' 
-    ? 'audio' 
-    : (muteAudioCheckbox.checked ? 'mute' : 'auto');
-
-  const payload = {
-    url: rawUrl,
-    videoQuality: qualitySelect.value,
-    audioFormat: 'mp3',
-    downloadMode: downloadMode,
-    filenameStyle: 'pretty'
-  };
 
   try {
-    const data = await fetchFromCobalt(payload);
+    // 1. YouTube Handler (Direct & Free via Piped)
+    if (platform === 'youtube') {
+      const ytId = getYouTubeId(rawUrl);
+      if (!ytId) throw new Error('Invalid YouTube URL format.');
 
-    if (data.status === 'error') {
-      showError('Extraction Error', data.text || 'Could not parse media from this link.');
+      const ytData = await fetchYouTube(ytId);
+      const isAudioOnly = formatSelect.value === 'audio';
+
+      // Parse streams
+      const streams = [];
+
+      // Add video streams with audio or direct MP4s
+      if (!isAudioOnly && ytData.videoStreams) {
+        // Collect MP4 format streams
+        const mp4Streams = ytData.videoStreams.filter(s => s.format === 'MPEG_4' || s.mimeType?.includes('mp4'));
+        const streamsToAdd = mp4Streams.length > 0 ? mp4Streams : ytData.videoStreams;
+
+        streamsToAdd.forEach(s => {
+          streams.push({
+            label: s.quality || 'MP4 Video',
+            subtext: `${s.format || 'MP4'} ${s.videoOnly ? '(Video stream)' : '(Synced audio)'}`,
+            url: s.url,
+            isAudio: false
+          });
+        });
+      }
+
+      // Add Audio Streams
+      if (ytData.audioStreams) {
+        ytData.audioStreams.slice(0, 2).forEach((a, idx) => {
+          streams.push({
+            label: `Audio Only (${a.quality || (idx === 0 ? 'High' : 'Medium')})`,
+            subtext: `${a.format || 'MP3/M4A'} • Clean audio`,
+            url: a.url,
+            isAudio: true
+          });
+        });
+      }
+
+      const defaultStream = isAudioOnly 
+        ? streams.find(s => s.isAudio)?.url 
+        : streams.find(s => !s.isAudio)?.url;
+
+      displayVideoResult({
+        title: ytData.title || 'YouTube Video',
+        thumbnail: ytData.thumbnailUrl,
+        platform: 'YouTube',
+        streams: streams,
+        directUrl: defaultStream || ytData.videoStreams?.[0]?.url
+      });
       return;
     }
 
-    // Success response: tunnel or redirect
-    if (data.status === 'tunnel' || data.status === 'redirect') {
-      showSuccessSingle(data.url, data.filename || 'download.mp4');
-    } else if (data.status === 'picker' && Array.isArray(data.picker)) {
-      showSuccessPicker(data.picker);
-    } else if (data.url) {
-      showSuccessSingle(data.url, data.filename || 'download.mp4');
+    // 2. Twitter / X.com Handler (Direct & Free via FxTwitter)
+    if (platform === 'x (twitter)') {
+      const tweetId = getTwitterId(rawUrl);
+      if (!tweetId) throw new Error('Could not parse Tweet ID from this URL.');
+
+      const tweet = await fetchTwitter(tweetId);
+      const videos = tweet.media?.videos || [];
+      const photos = tweet.media?.photos || [];
+
+      if (videos.length === 0 && photos.length === 0) {
+        throw new Error('This post does not contain any video or downloadable media.');
+      }
+
+      const streams = [];
+      videos.forEach((v, i) => {
+        streams.push({
+          label: `Video #${i + 1} (Direct MP4)`,
+          subtext: `${v.duration ? Math.round(v.duration) + 's • ' : ''}HD with sound`,
+          url: v.url,
+          isAudio: false
+        });
+      });
+
+      photos.forEach((p, i) => {
+        streams.push({
+          label: `Photo #${i + 1}`,
+          subtext: 'High-res image',
+          url: p.url,
+          isAudio: false
+        });
+      });
+
+      displayVideoResult({
+        title: tweet.text ? tweet.text.slice(0, 60) + '...' : `Tweet by @${tweet.author?.screen_name}`,
+        platform: 'X (Twitter)',
+        streams: streams,
+        directUrl: videos[0]?.url || photos[0]?.url
+      });
+      return;
+    }
+
+    // 3. Reddit Handler
+    if (platform === 'reddit') {
+      const rapidUrl = `https://rapidsave.com/info?url=${encodeURIComponent(rawUrl)}`;
+      displayGatewayCard({
+        title: 'Reddit Video Post',
+        platform: 'Reddit',
+        directGatewayUrl: rapidUrl,
+        gatewayName: 'RapidSave',
+        subtitle: 'Save Reddit v.redd.it videos with synced audio tracks instantly.'
+      });
+      return;
+    }
+
+    // 4. Instagram Handler
+    if (platform === 'instagram') {
+      const instaUrl = `https://saveig.app/en#${encodeURIComponent(rawUrl)}`;
+      displayGatewayCard({
+        title: 'Instagram Reel / Post',
+        platform: 'Instagram',
+        directGatewayUrl: instaUrl,
+        gatewayName: 'SaveIG Engine',
+        subtitle: 'Download public Instagram Reels, Stories and video posts in original quality.'
+      });
+      return;
+    }
+
+    // 5. Facebook Handler
+    if (platform === 'facebook') {
+      const fbUrl = `https://fdown.net/download.php?url=${encodeURIComponent(rawUrl)}`;
+      displayGatewayCard({
+        title: 'Facebook Video',
+        platform: 'Facebook',
+        directGatewayUrl: fbUrl,
+        gatewayName: 'FDown Engine',
+        subtitle: 'Download Facebook Reels and public videos in HD / SD resolution.'
+      });
+      return;
+    }
+
+    // 6. Generic / Other Platforms: Try Cobalt API
+    const cobaltPayload = {
+      url: rawUrl,
+      videoQuality: qualitySelect.value,
+      audioFormat: 'mp3',
+      downloadMode: formatSelect.value === 'audio' ? 'audio' : 'auto'
+    };
+
+    const cobaltData = await fetchCobalt(cobaltPayload);
+    if (cobaltData.url) {
+      displayVideoResult({
+        title: cobaltData.filename || 'Downloaded Video',
+        platform: platform || 'Web Media',
+        directUrl: cobaltData.url,
+        streams: [{
+          label: 'Direct Stream',
+          subtext: 'Merged audio & video',
+          url: cobaltData.url,
+          isAudio: formatSelect.value === 'audio'
+        }]
+      });
     } else {
-      showError('Unknown Format', 'The server responded but did not provide a valid download URL.');
+      throw new Error('Unsupported URL format. Please paste a link from YouTube, X.com, Instagram, Reddit, or Facebook.');
     }
 
   } catch (err) {
-    showError('Download Failed', err.message || 'Unable to download video. Make sure the video is public and accessible.');
+    showError('Extraction Error', err.message || 'Could not fetch video. Please check your link.');
   } finally {
     state.isProcessing = false;
     downloadBtn.disabled = false;
     downloadBtn.innerHTML = `<i data-lucide="arrow-down-to-line" class="w-5 h-5"></i><span>Fetch Video</span>`;
     refreshIcons();
   }
-}
-
-// Show single file download
-function showSuccessSingle(url, filename) {
-  resetStatus();
-  statusContainer.classList.remove('hidden');
-  resultCard.classList.remove('hidden');
-
-  resultPlatform.textContent = state.detectedPlatform || 'Media';
-  resultFilename.textContent = filename || 'download.mp4';
-  saveVideoLink.href = url;
-  saveVideoLink.setAttribute('download', filename || 'video.mp4');
-
-  // Trigger auto download if desirable or let user click
-  refreshIcons();
-}
-
-// Show multiple items (carousels, album, etc.)
-function showSuccessPicker(items) {
-  resetStatus();
-  statusContainer.classList.remove('hidden');
-  resultCard.classList.remove('hidden');
-
-  resultPlatform.textContent = state.detectedPlatform || 'Album/Carousel';
-  resultFilename.textContent = `${items.length} items found`;
-  saveVideoLink.classList.add('hidden'); // Use individual buttons
-  pickerContainer.classList.remove('hidden');
-  pickerList.innerHTML = '';
-
-  items.forEach((item, index) => {
-    const isVideo = item.type === 'video';
-    const card = document.createElement('div');
-    card.className = 'p-3 bg-slate-950/80 border border-slate-800 rounded-xl flex items-center justify-between gap-2';
-    card.innerHTML = `
-      <div class="flex items-center gap-2 overflow-hidden">
-        <div class="w-8 h-8 rounded bg-slate-800 flex items-center justify-center text-slate-400 shrink-0">
-          <i data-lucide="${isVideo ? 'film' : 'image'}" class="w-4 h-4"></i>
-        </div>
-        <div class="truncate text-xs">
-          <p class="font-medium text-slate-200 truncate">Item #${index + 1} (${item.type})</p>
-        </div>
-      </div>
-      <a 
-        href="${item.url}" 
-        target="_blank" 
-        download="item_${index + 1}.${isVideo ? 'mp4' : 'jpg'}"
-        class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-medium shrink-0 flex items-center gap-1"
-      >
-        <i data-lucide="download" class="w-3.5 h-3.5"></i> Save
-      </a>
-    `;
-    pickerList.appendChild(card);
-  });
-
-  refreshIcons();
 }
 
 // Event Listeners
@@ -332,48 +591,26 @@ urlInput.addEventListener('keydown', (e) => {
   }
 });
 
-// Settings Modal Management
+// Settings Modal
 settingsBtn.addEventListener('click', () => {
   settingsModal.classList.remove('hidden');
-  if (DEFAULT_INSTANCES.includes(state.activeInstance)) {
-    instancePresetSelect.value = state.activeInstance;
-    customInstanceWrapper.classList.add('hidden');
-  } else {
-    instancePresetSelect.value = 'custom';
-    customInstanceWrapper.classList.remove('hidden');
-    customInstanceInput.value = state.activeInstance;
-  }
+  customInstanceInput.value = state.cobaltInstance;
 });
 
 closeSettingsBtn.addEventListener('click', () => {
   settingsModal.classList.add('hidden');
 });
 
-instancePresetSelect.addEventListener('change', () => {
-  if (instancePresetSelect.value === 'custom') {
-    customInstanceWrapper.classList.remove('hidden');
-  } else {
-    customInstanceWrapper.classList.add('hidden');
-  }
-});
-
 saveSettingsBtn.addEventListener('click', () => {
-  let selected = instancePresetSelect.value;
-  if (selected === 'custom') {
-    const custom = customInstanceInput.value.trim().replace(/\/+$/, '');
-    if (custom) {
-      selected = custom;
-    } else {
-      selected = DEFAULT_INSTANCES[0];
-    }
+  const custom = customInstanceInput.value.trim().replace(/\/+$/, '');
+  if (custom) {
+    state.cobaltInstance = custom;
+    localStorage.setItem('vidgrab_api_instance', custom);
   }
-
-  state.activeInstance = selected;
-  localStorage.setItem('vidgrab_api_instance', selected);
   settingsModal.classList.add('hidden');
 });
 
-// Initial boot
+// Boot
 document.addEventListener('DOMContentLoaded', () => {
   refreshIcons();
 });
