@@ -1,6 +1,6 @@
 # 🎬 VidGrab — Universal Video Downloader
 
-A lightweight, 100% free, serverless video downloader web app for **YouTube** (Long videos & Shorts), **Instagram** (Reels & Posts), **Reddit**, **Facebook**, and **X.com** (Twitter).
+A lightweight, 100% free, serverless video downloader web app for **YouTube** (Long videos & Shorts), **X.com** (Twitter), **Instagram** (Reels & Posts), **Reddit**, **Facebook**, and **TikTok**.
 
 Deployable directly to **GitHub Pages** with zero backend infrastructure or server costs.
 
@@ -8,31 +8,36 @@ Deployable directly to **GitHub Pages** with zero backend infrastructure or serv
 
 ## ✨ Features
 
-- ⚡ **Zero Server / 100% Free** — Pure client-side static application running directly in the browser.
+- ⚡ **Zero Server / 100% Free** — Pure client-side static web application running directly in your browser.
 - 🎯 **Multiple Platforms Supported**:
   - **YouTube:** Full videos, Shorts, 4K/1080p/720p with audio merged.
+  - **X.com (Twitter):** Embedded video tweets and clips with direct MP4 downloads.
   - **Instagram:** Reels, video posts, carousel media.
   - **Reddit:** `v.redd.it` videos with synced sound.
   - **Facebook:** Public videos and Reels.
-  - **X.com (Twitter):** Embedded video tweets and clips.
+  - **TikTok:** Watermark-free HD video saving.
 - 🎚️ **Quality Selection** — Download in 4K (2160p), 1440p, 1080p, 720p, 480p, or 360p.
-- 🔊 **Synced Audio Included** — Always merges high-quality audio with the video stream.
+- 🔊 **Synced Audio Included** — Always pairs high-quality audio with the video stream.
 - 🎵 **Audio Extraction Mode** — Quick option to save sound tracks as MP3 directly.
 - 📋 **One-Click Paste** — Auto-detects URLs from your clipboard.
-- 🔄 **Automatic Instance Failover** — Uses decentralized, free, open-source extraction nodes (Cobalt API) with automatic fallback if one is busy.
-- 📱 **Mobile & Desktop Friendly** — Clean, dark-mode responsive UI built with Tailwind CSS.
+- 🔄 **Smart Zero-Crash Architecture**:
+  - Direct client-side streaming extraction with automatic multi-node failover.
+  - Smart fallback to pre-filled 1-Click Download Gateways (SSYouTube, Y2Mate, SaveIG, RapidSave, FDown, SnapTik) so downloads **never fail with an error**.
+- 📱 **Mobile & Desktop Friendly** — Clean, dark-mode responsive glassmorphic UI built with Tailwind CSS and Lucide icons.
 
 ---
 
 ## 🚀 Quick Setup & Deployment
 
 ### 1. View Locally
-Simply open `index.html` in any web browser:
+Simply open `index.html` in any modern web browser:
 ```bash
-# Double click index.html or open with your browser
-start index.html   # On Windows
-open index.html    # On macOS
-xdg-open index.html # On Linux
+# On Windows
+start index.html
+# On macOS
+open index.html
+# On Linux
+xdg-open index.html
 ```
 
 ### 2. Deploy to GitHub Pages (Free Web Hosting)
@@ -40,7 +45,7 @@ xdg-open index.html # On Linux
    ```bash
    git init
    git add .
-   git commit -m "Initial commit: VidGrab Universal Downloader"
+   git commit -m "VidGrab Universal Downloader"
    git branch -M main
    git remote add origin https://github.com/<YOUR-USERNAME>/<YOUR-REPO-NAME>.git
    git push -u origin main
@@ -58,7 +63,7 @@ xdg-open index.html # On Linux
 
 ```text
 ├── index.html        # Main web app layout and controls
-├── app.js            # Platform detection, API integration & download handlers
+├── app.js            # Platform detection, multi-engine extraction & fallback logic
 ├── style.css         # Glassmorphism, animations and custom scrollbars
 ├── README.md         # Documentation & setup guide
 ├── LICENSE           # MIT License
@@ -69,12 +74,12 @@ xdg-open index.html # On Linux
 
 ## 🔌 How It Works (Client-Side Architecture)
 
-Browsers enforce strict **CORS** and cross-origin security policies that prevent JavaScript from directly scraping video blobs from YouTube or Instagram without a proxy. 
+Browsers enforce strict **CORS** and cross-origin security policies that prevent JavaScript from directly scraping raw media blobs from protected platforms without an API proxy.
 
-**VidGrab** solves this by routing requests through free, open-source public [Cobalt](https://github.com/imputnet/cobalt) instances:
-- No tracking or data retention.
-- No user accounts or API keys required.
-- You can switch extraction instances or self-host your own node anytime from the in-app **Settings** modal.
+**VidGrab** solves this gracefully without any private server:
+1. **Decentralized API Extraction:** Uses live public Piped and FxTwitter nodes to query stream formats and metadata directly.
+2. **Instant Download Gateway Bridges:** When a platform applies strict bot-protection or cipher restrictions, VidGrab seamlessly transitions to pre-filled 1-click mirrors (SSYouTube, Y2Mate, SaveIG, RapidSave, FDown, SnapTik), providing instant access to 1080p, 4K, or MP3 with sound.
+3. **100% Free & Private:** No user accounts, no tracking, and no private server maintenance required.
 
 ---
 
